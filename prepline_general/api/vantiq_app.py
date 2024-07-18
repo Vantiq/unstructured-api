@@ -1,8 +1,9 @@
 import io
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import requests
 from fastapi import APIRouter, UploadFile
+from pydantic import BaseModel, Field
 from starlette.requests import Request
 from unstructured.file_utils.filetype import detect_filetype, FILETYPE_TO_MIMETYPE
 
@@ -13,8 +14,15 @@ from .models.form_params import GeneralFormParams
 vantiq_router = APIRouter()
 
 
+class UrlWithContext(BaseModel):
+    url: str
+    content_type: Optional[str] = None
+    headers: Optional[dict] = None
+    filename: Optional[str] = None
+
+
 class PartitionUrls(GeneralFormParams):
-    urls: List[str]
+    urls: List[Union[str, UrlWithContext]]
     xml_keep_tags: bool = False
     languages: Optional[List[str]] = []
     ocr_languages: Optional[List[str]] = []
@@ -57,20 +65,32 @@ def partition_urls(
     to_partition: PartitionUrls,
 ):
     files: List[UploadFile] = []
-    for url in to_partition.urls:
+    for entry in to_partition.urls:
+        # Is this just a URL or the URL with a content type?
+        if isinstance(entry, UrlWithContext):
+            url = entry.url
+            content_type = entry.content_type
+            url_headers = entry.headers
+            filename = entry.filename or url
+        else:
+            url = entry
+            content_type = None
+            url_headers = None
+            filename = url
+
         # Fetch the content from the URL and treat as named ByteIO object
-        response = requests.get(url)
+        response = requests.get(url, headers=url_headers)
         file = NamedIO(response.content)
-        file.name = url
+        file.name = filename
 
         # Determine the file type from the content/name
         encoding = response.headers.get("Content-Encoding", "utf-8")
-        filetype = detect_filetype(file=file, encoding=encoding)
+        filetype = detect_filetype(file=file, encoding=encoding, content_type=content_type)
 
         # Construct an UploadFile object with the file and its metadata, so we can use the general_partition function
         headers = request.headers.mutablecopy()
-        headers["Content-Type"] = FILETYPE_TO_MIMETYPE[filetype]
-        upload = UploadFile(file= file, filename=url, headers=headers)
+        headers["Content-Type"] = content_type or FILETYPE_TO_MIMETYPE[filetype]
+        upload = UploadFile(file= file, filename=filename, headers=headers)
         files.append(upload)
     return general_partition(request, files, to_partition)
 
