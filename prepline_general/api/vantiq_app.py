@@ -8,7 +8,7 @@ import requests
 from fastapi import APIRouter, UploadFile
 from pydantic import BaseModel
 from starlette.requests import Request
-from unstructured.file_utils.filetype import detect_filetype, FILETYPE_TO_MIMETYPE, FileType
+from unstructured.file_utils.filetype import detect_filetype, FileType
 
 from .app import app
 from .general import general_partition
@@ -34,6 +34,7 @@ class PartitionUrls(GeneralFormParams):
     output_format: str = "application/json"
     coordinates: bool = False
     encoding: str = "utf-8"
+    content_type: Optional[str] = None
     hi_res_model_name: Optional[str] = None
     include_page_breaks: bool = False
     pdf_infer_table_structure: bool = False
@@ -58,7 +59,7 @@ class PartitionUrls(GeneralFormParams):
     description="Description",
     operation_id="partition_parameters",
 )
-@vantiq_router.post("/general/v0.0.73/urls", include_in_schema=False)
+@vantiq_router.post("/general/v0.0.79/urls", include_in_schema=False)
 def partition_urls(
     request: Request,
     to_partition: PartitionUrls,
@@ -85,12 +86,10 @@ def partition_urls(
 
 
 # noinspection PyAbstractClass
-class NameOverride(SpooledTemporaryFile):
-    name_override: str
-
+class _NoNameOverride(SpooledTemporaryFile):
     @property
     def name(self):
-        return self.name_override
+        return None
 
 
 def download_for_processing(entry: Union[str, UrlWithContext], request: Request, dir_name: str) -> UploadFile:
@@ -115,16 +114,16 @@ def download_for_processing(entry: Union[str, UrlWithContext], request: Request,
 
     # Determine the file type from the content/name (if not provided)
     if not content_type:
-        # Start by passing the filename to the detection function.
-        encoding = response.headers.get("Content-Encoding", "utf-8")
-        filetype = detect_filetype(file=tmp_file, file_filename=filename, encoding=encoding)
-        if filetype is FileType.UNK:
-            # If the file type is still unknown, try again without the explicit filename, but first we need
-            # to monkey patch the temp file so that when the code asks for a name, it gets one (don't ask).
-            tmp_file.__class__ = NameOverride
-            tmp_file.name_override = filename
-            filetype = detect_filetype(file=tmp_file, encoding=encoding)
-        content_type = FILETYPE_TO_MIMETYPE[filetype]
+        # Before we do the detection, we need to monkey patch the temp file so that it returns None for the name
+        # Otherwise, the spooled temp file will return a value for "name" that isn't usable by the detection code
+        # (don't ask).
+        tmp_file.__class__ = _NoNameOverride
+
+        # Attempt to detect the file type using contents and/or the filename
+        filetype = detect_filetype(file=tmp_file, metadata_file_path=filename)
+        if filetype == FileType.UNK:
+            raise ValueError(f"Could not determine the content type for {url}.")
+        content_type = filetype.mime_type
 
     # Construct an UploadFile object with the file and its metadata, so we can use the general_partition function
     headers = request.headers.mutablecopy()
