@@ -12,9 +12,7 @@ class _ByPageChunkingOptions(_ByTitleChunkingOptions):
     def boundary_predicates(self) -> tuple[BoundaryPredicate, ...]:
         """The semantic-boundary detectors to be applied to break pre-chunks.
 
-        For the `by_title` strategy these are sections indicated by a title (section-heading), an
-        explicit section metadata item (only present for certain document types), and optionally
-        page boundaries.
+        For the `by_page` strategy these are page boundaries.
         """
 
         def iter_boundary_predicates() -> Iterator[BoundaryPredicate]:
