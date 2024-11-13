@@ -1,18 +1,22 @@
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from tempfile import TemporaryDirectory, SpooledTemporaryFile
 from typing import List, Optional, Union
 
 import requests
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, UploadFile, HTTPException
 from pydantic import BaseModel
 from starlette.requests import Request
+from unstructured.chunking import register_chunking_strategy
 from unstructured.file_utils.filetype import detect_filetype, FileType
 
-from .app import app
-from .general import general_partition
-from .models.form_params import GeneralFormParams
+from prepline_general.api.app import app
+from prepline_general.api.general import general_partition
+from prepline_general.api import general
+from prepline_general.api.models.form_params import GeneralFormParams
+from prepline_general.api.vantiq.chunking import chunk_by_page
 
 vantiq_router = APIRouter()
 
@@ -44,12 +48,34 @@ class PartitionUrls(GeneralFormParams):
     # -- chunking options --
     chunking_strategy: Optional[str] = None
     combine_under_n_chars: Optional[int] = None
-    max_characters: int = 500
+    max_characters: int = sys.maxsize
     multipage_sections: bool = True
     new_after_n_chars: Optional[int] = None
     overlap: int = 0
     overlap_all: bool = False
 
+
+def vantiq_validate_chunking_strategy(chunking_strategy: Optional[str]) -> Optional[str]:
+    """Raise on `chunking_strategy` is not a valid chunking strategy name.
+
+    Also provides case-insensitivity.
+    """
+    if chunking_strategy is None:
+        return None
+
+    chunking_strategy = chunking_strategy.lower()
+    available_strategies = ["basic", "by_title", "by_page"]
+
+    if chunking_strategy not in available_strategies:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid chunking strategy: {chunking_strategy}. Must be one of"
+                f" {available_strategies}"
+            ),
+        )
+
+    return chunking_strategy
 
 @vantiq_router.post(
     "/general/v0/urls",
@@ -131,6 +157,10 @@ def download_for_processing(entry: Union[str, UrlWithContext], request: Request,
     # noinspection PyTypeChecker
     return UploadFile(file=tmp_file, filename=filename, headers=headers)
 
+# Monkey patch the chunking strategy validation function
+general._validate_chunking_strategy = vantiq_validate_chunking_strategy
+# noinspection PyTypeChecker
+register_chunking_strategy("by_page", chunk_by_page)
 
 app.include_router(vantiq_router)
 vantiq_app = app
