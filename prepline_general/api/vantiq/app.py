@@ -131,9 +131,14 @@ def download_for_processing(entry: Union[str, UrlWithContext], request: Request,
         url_headers = None
         filename = url
 
-    # Fetch the content from the URL to a temp file
+    # Fetch the content from the URL to a temp file (raise error if not successful)
     tmp_file = SpooledTemporaryFile(max_size=10 * 1024 * 1024, dir=dir_name)
     response = requests.get(url, headers=url_headers, stream=True)
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        body = response.json()
+        raise ValueError(f"Error ({response.status_code}) processing URL {url}: {body}")
     for chunk in response.iter_content(chunk_size=1024*1024):
         tmp_file.write(chunk)
     tmp_file.seek(0)
