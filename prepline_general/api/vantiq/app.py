@@ -137,8 +137,7 @@ def download_for_processing(entry: Union[str, UrlWithContext], request: Request,
     try:
         response.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        body = response.json()
-        raise ValueError(f"Error ({response.status_code}) processing URL {url}: {body}")
+        raise HTTPException(status_code=response.status_code, detail=f"{e}")
     for chunk in response.iter_content(chunk_size=1024*1024):
         tmp_file.write(chunk)
     tmp_file.seek(0)
