@@ -178,10 +178,10 @@ class GeneralFormParams(BaseModel):
         ] = False,
         # -- chunking options --
         chunking_strategy: Annotated[
-            Optional[Literal["by_title"]],
+            Optional[str],
             Form(
                 title="Chunking Strategy",
-                description="Use one of the supported strategies to chunk the returned elements. Currently supports: by_title",
+                description="Use one of the supported strategies to chunk the returned elements.",
                 examples=["by_title"],
             ),
         ] = None,
