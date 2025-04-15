@@ -53,6 +53,8 @@ class PartitionUrls(GeneralFormParams):
     new_after_n_chars: Optional[int] = None
     overlap: int = 0
     overlap_all: bool = False
+    starting_page_number: Optional[int] = None
+    include_slide_notes: bool = True
 
 
 def vantiq_validate_chunking_strategy(chunking_strategy: Optional[str]) -> Optional[str]:
