@@ -17,6 +17,7 @@ from prepline_general.api.general import general_partition
 from prepline_general.api import general
 from prepline_general.api.models.form_params import GeneralFormParams
 from prepline_general.api.vantiq.chunking import chunk_by_page
+from prepline_general.api import __version__ as api_version
 
 vantiq_router = APIRouter()
 
@@ -87,7 +88,7 @@ def vantiq_validate_chunking_strategy(chunking_strategy: Optional[str]) -> Optio
     description="Description",
     operation_id="partition_parameters",
 )
-@vantiq_router.post("/general/v0.0.79/urls", include_in_schema=False)
+@vantiq_router.post(f"/general/{api_version}/urls", include_in_schema=False)
 def partition_urls(
     request: Request,
     to_partition: PartitionUrls,
