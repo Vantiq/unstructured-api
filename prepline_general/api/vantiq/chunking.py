@@ -4,11 +4,11 @@ from unstructured.chunking.base import BoundaryPredicate, is_on_next_page, PreCh
 # noinspection PyProtectedMember
 from unstructured.chunking.title import _ByTitleChunkingOptions
 from unstructured.documents.elements import Element
-from unstructured.utils import lazyproperty
+from functools import cached_property
 
 
 class _ByPageChunkingOptions(_ByTitleChunkingOptions):
-    @lazyproperty
+    @cached_property
     def boundary_predicates(self) -> tuple[BoundaryPredicate, ...]:
         """The semantic-boundary detectors to be applied to break pre-chunks.
 
